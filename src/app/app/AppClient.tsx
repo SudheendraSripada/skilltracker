@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -60,12 +59,35 @@ type ActiveTest = {
   questions: TestQuestion[];
 };
 
+type Profile = {
+  user_id: string;
+  username: string;
+  full_name: string;
+  primary_skill: string;
+  experience_level: string;
+  learning_goal: string;
+};
+
+function usernameToEmail(username: string) {
+  return `${username.trim().toLowerCase()}@skilltracker.local`;
+}
+
+function normalizeUsername(input: string) {
+  return input.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+}
+
 export default function AppClient() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
-  const searchParams = useSearchParams();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [primarySkill, setPrimarySkill] = useState("");
+  const [experienceLevel, setExperienceLevel] = useState("");
+  const [learningGoal, setLearningGoal] = useState("");
   const [topics, setTopics] = useState<Topic[]>([]);
   const [newTopic, setNewTopic] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -75,15 +97,6 @@ export default function AppClient() {
   const [testAnswers, setTestAnswers] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<{ score: number; maxScore: number } | null>(null);
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const code = searchParams.get("code");
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).catch(() => {
-        setMessage("Could not verify the email link. Please try again.");
-      });
-    }
-  }, [searchParams, supabase]);
 
   useEffect(() => {
     let mounted = true;
@@ -109,7 +122,21 @@ export default function AppClient() {
   useEffect(() => {
     if (!session) return;
     void loadTopics();
+    void loadProfile();
   }, [session]);
+
+  const loadProfile = async () => {
+    if (!session) return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("user_id, username, full_name, primary_skill, experience_level, learning_goal")
+      .eq("user_id", session.user.id)
+      .single();
+
+    if (!error && data) {
+      setProfile(data as Profile);
+    }
+  };
 
   const loadTopics = async () => {
     const { data, error } = await supabase
@@ -129,20 +156,77 @@ export default function AppClient() {
     setTopics((data ?? []) as Topic[]);
   };
 
-  const handleMagicLink = async () => {
+  const handleSignUp = async () => {
     setMessage(null);
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${appUrl}/app`,
-      },
-    });
+    const cleanUsername = normalizeUsername(username);
+
+    if (cleanUsername.length < 3) {
+      setMessage("Username must be at least 3 characters (letters, numbers, underscore).");
+      return;
+    }
+    if (password.length < 6) {
+      setMessage("Password must be at least 6 characters.");
+      return;
+    }
+    if (!fullName.trim() || !primarySkill.trim() || !experienceLevel.trim() || !learningGoal.trim()) {
+      setMessage("Please fill all profile fields.");
+      return;
+    }
+
+    const email = usernameToEmail(cleanUsername);
+    const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
       setMessage(error.message);
-    } else {
-      setMessage("Check your email for the login link.");
+      return;
+    }
+
+    if (!data.user) {
+      setMessage("Sign up failed. Please try again.");
+      return;
+    }
+
+    const { error: profileError } = await supabase.from("profiles").upsert({
+      user_id: data.user.id,
+      username: cleanUsername,
+      full_name: fullName.trim(),
+      primary_skill: primarySkill.trim(),
+      experience_level: experienceLevel.trim(),
+      learning_goal: learningGoal.trim(),
+    });
+
+    if (profileError) {
+      setMessage(profileError.message);
+      return;
+    }
+
+    if (!data.session) {
+      setMessage("Disable email confirmation in Supabase Auth to allow instant login.");
+      return;
+    }
+
+    setMessage("Account created. You are now signed in.");
+  };
+
+  const handleLogin = async () => {
+    setMessage(null);
+    const cleanUsername = normalizeUsername(username);
+
+    if (cleanUsername.length < 3) {
+      setMessage("Enter a valid username.");
+      return;
+    }
+    if (!password) {
+      setMessage("Enter password.");
+      return;
+    }
+
+    const email = usernameToEmail(cleanUsername);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setMessage(error.message);
+      return;
     }
   };
 
@@ -286,25 +370,82 @@ export default function AppClient() {
         <div className="max-w-lg w-full rounded-3xl border border-slate-800 bg-slate-900/70 p-8 shadow-2xl">
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Skill Tracker</p>
-            <h1 className="text-3xl font-semibold">Sign in with OTP</h1>
+            <h1 className="text-3xl font-semibold">Simple Login</h1>
             <p className="text-slate-400 text-sm">
-              We will email you a secure, single-use login link.
+              Sign in using username and password. No email verification required.
             </p>
           </div>
-          <div className="mt-6 space-y-4">
+
+          <div className="mt-6 flex gap-2 rounded-xl border border-slate-800 p-1">
+            <button
+              onClick={() => setAuthMode("login")}
+              className={`flex-1 rounded-lg px-3 py-2 text-sm ${authMode === "login" ? "bg-emerald-400 text-slate-900" : "text-slate-300"}`}
+            >
+              Login
+            </button>
+            <button
+              onClick={() => setAuthMode("signup")}
+              className={`flex-1 rounded-lg px-3 py-2 text-sm ${authMode === "signup" ? "bg-emerald-400 text-slate-900" : "text-slate-300"}`}
+            >
+              Sign up
+            </button>
+          </div>
+
+          <div className="mt-5 space-y-3">
             <input
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              type="text"
+              placeholder="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
             />
+            <input
+              type="password"
+              placeholder="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+            />
+
+            {authMode === "signup" && (
+              <>
+                <input
+                  type="text"
+                  placeholder="full name"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+                />
+                <input
+                  type="text"
+                  placeholder="primary skill (e.g. React, DSA)"
+                  value={primarySkill}
+                  onChange={(event) => setPrimarySkill(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+                />
+                <input
+                  type="text"
+                  placeholder="experience level (beginner/intermediate/advanced)"
+                  value={experienceLevel}
+                  onChange={(event) => setExperienceLevel(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+                />
+                <textarea
+                  placeholder="learning goal"
+                  value={learningGoal}
+                  onChange={(event) => setLearningGoal(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+                />
+              </>
+            )}
+
             <button
-              onClick={handleMagicLink}
+              onClick={authMode === "signup" ? handleSignUp : handleLogin}
               className="w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300"
             >
-              Send login link
+              {authMode === "signup" ? "Create account" : "Login"}
             </button>
+
             {message && <p className="text-sm text-amber-200">{message}</p>}
           </div>
         </div>
@@ -320,7 +461,9 @@ export default function AppClient() {
             <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Skill Tracker</p>
             <h1 className="text-3xl font-semibold">Personal Learning Studio</h1>
             <p className="text-slate-400 text-sm max-w-xl">
-              Organize subtopics, track completions, and validate progress in one flow.
+              {profile
+                ? `${profile.full_name} | ${profile.primary_skill} | ${profile.experience_level}`
+                : "Organize subtopics, track completions, and validate progress in one flow."}
             </p>
           </div>
           <button

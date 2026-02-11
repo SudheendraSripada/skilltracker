@@ -1,5 +1,15 @@
 create extension if not exists "pgcrypto";
 
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null unique,
+  full_name text not null,
+  primary_skill text not null,
+  experience_level text not null,
+  learning_goal text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.topics (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
@@ -55,11 +65,17 @@ create table if not exists public.test_questions (
   created_at timestamptz not null default now()
 );
 
+alter table public.profiles enable row level security;
 alter table public.topics enable row level security;
 alter table public.subtopics enable row level security;
 alter table public.resources enable row level security;
 alter table public.tests enable row level security;
 alter table public.test_questions enable row level security;
+
+create policy "profiles_read" on public.profiles for select using (auth.uid() = user_id);
+create policy "profiles_write" on public.profiles for insert with check (auth.uid() = user_id);
+create policy "profiles_update" on public.profiles for update using (auth.uid() = user_id);
+create policy "profiles_delete" on public.profiles for delete using (auth.uid() = user_id);
 
 create policy "topics_read" on public.topics for select using (auth.uid() = user_id);
 create policy "topics_write" on public.topics for insert with check (auth.uid() = user_id);
