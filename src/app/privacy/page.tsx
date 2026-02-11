@@ -27,8 +27,8 @@ export default function PrivacyPage() {
             <section>
               <h2 className="text-base font-semibold text-white">3. Authentication</h2>
               <p className="mt-2 text-slate-300">
-                Authentication is handled through a secure email login flow. We do not store your
-                password.
+                Authentication uses username and password with secure Supabase sessions. Password
+                storage and verification are handled by Supabase Auth.
               </p>
             </section>
 

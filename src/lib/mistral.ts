@@ -36,6 +36,18 @@ const ResourceSchema = z.object({
     .min(2),
 });
 
+const ProgressAnalysisSchema = z.object({
+  summary: z.string().min(10),
+  riskLevel: z.enum(["low", "medium", "high"]),
+  actions: z.array(z.string().min(3)).min(2).max(5),
+  reminder: z.string().min(5),
+});
+
+const DoubtReplySchema = z.object({
+  answer: z.string().min(5),
+  followUps: z.array(z.string().min(3)).min(1).max(3),
+});
+
 function getMistralConfig() {
   const apiKey = process.env.MISTRAL_API_KEY;
   const baseUrl = process.env.MISTRAL_BASE_URL ?? "https://api.mistral.ai/v1";
@@ -157,4 +169,59 @@ Rules:
 
   const parsed = await callMistral(prompt);
   return ResourceSchema.parse(parsed);
+}
+
+export async function analyzeProgress(input: {
+  fullName: string;
+  primarySkill: string;
+  experienceLevel: string;
+  learningGoal: string;
+  totalTopics: number;
+  completedSubtopics: number;
+  pendingSubtopics: number;
+  attemptedTests: number;
+  avgScore: number;
+  recentTopics: string[];
+}) {
+  const prompt = `You are a strict learning progress coach.
+Return JSON only.
+Schema:
+{
+  "summary": "",
+  "riskLevel": "low|medium|high",
+  "actions": ["", ""],
+  "reminder": ""
+}
+Data:
+${JSON.stringify(input)}
+Rules:
+- Summary in 1-2 sentences.
+- Actions must be concrete and short.
+- Reminder should push timely completion without being aggressive.`;
+
+  const parsed = await callMistral(prompt);
+  return ProgressAnalysisSchema.parse(parsed);
+}
+
+export async function answerDoubt(input: {
+  topic: string;
+  doubt: string;
+  userLevel: string;
+}) {
+  const prompt = `You are a concise doubt-clearing tutor.
+Return JSON only.
+Schema:
+{
+  "answer": "",
+  "followUps": ["", ""]
+}
+Data:
+${JSON.stringify(input)}
+Rules:
+- Keep answer practical and easy to apply.
+- Mention one concrete next step.
+- Keep followUps useful and short.`;
+
+  const parsed = await callMistral(prompt);
+  return DoubtReplySchema.parse(parsed);
 }

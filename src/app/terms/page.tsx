@@ -19,7 +19,7 @@ export default function TermsPage() {
             <section>
               <h2 className="text-base font-semibold text-white">2. Accounts & Access</h2>
               <p className="mt-2 text-slate-300">
-                Authentication is handled through a secure email login flow. You are responsible for
+                Authentication uses username and password with secure Supabase sessions. You are responsible for
                 maintaining the security of your account access.
               </p>
             </section>

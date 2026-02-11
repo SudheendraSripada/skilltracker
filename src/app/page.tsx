@@ -55,7 +55,7 @@ export default function LandingPage() {
                 Completion prompts a test (optional, single attempt).
               </li>
               <li className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                OTP login via Supabase, per-user progress tracking.
+                Username/password login via Supabase, per-user progress tracking.
               </li>
             </ul>
           </section>

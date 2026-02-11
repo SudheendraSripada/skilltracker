@@ -68,6 +68,18 @@ type Profile = {
   learning_goal: string;
 };
 
+type ProgressAnalysis = {
+  summary: string;
+  riskLevel: "low" | "medium" | "high";
+  actions: string[];
+  reminder: string;
+};
+
+type DoubtReply = {
+  answer: string;
+  followUps: string[];
+};
+
 function usernameToEmail(username: string) {
   return `${username.trim().toLowerCase()}@skilltracker.local`;
 }
@@ -97,6 +109,18 @@ export default function AppClient() {
   const [testAnswers, setTestAnswers] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<{ score: number; maxScore: number } | null>(null);
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<ProgressAnalysis | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [doubtTopic, setDoubtTopic] = useState("");
+  const [doubtText, setDoubtText] = useState("");
+  const [doubtReply, setDoubtReply] = useState<DoubtReply | null>(null);
+  const [isDoubtLoading, setIsDoubtLoading] = useState(false);
+
+  const pendingSubtopicsCount = useMemo(() => {
+    return topics.reduce((acc, topic) => {
+      return acc + topic.subtopics.filter((subtopic) => subtopic.status !== "completed").length;
+    }, 0);
+  }, [topics]);
 
   useEffect(() => {
     let mounted = true;
@@ -201,7 +225,7 @@ export default function AppClient() {
     }
 
     if (!data.session) {
-      setMessage("Disable email confirmation in Supabase Auth to allow instant login.");
+      setMessage("Account created. Please login with your username and password.");
       return;
     }
 
@@ -227,6 +251,52 @@ export default function AppClient() {
     if (error) {
       setMessage(error.message);
       return;
+    }
+  };
+
+  const handleAnalyzeProgress = async () => {
+    setIsAnalyzing(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/analyze-progress", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to analyze progress");
+      }
+      setAnalysis(data as ProgressAnalysis);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleDoubtChat = async () => {
+    if (!doubtTopic.trim() || !doubtText.trim()) {
+      setMessage("Please enter topic and doubt.");
+      return;
+    }
+
+    setIsDoubtLoading(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/doubt-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: doubtTopic.trim(),
+          doubt: doubtText.trim(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to clear doubt");
+      }
+      setDoubtReply(data as DoubtReply);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsDoubtLoading(false);
     }
   };
 
@@ -372,7 +442,7 @@ export default function AppClient() {
             <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Skill Tracker</p>
             <h1 className="text-3xl font-semibold">Simple Login</h1>
             <p className="text-slate-400 text-sm">
-              Sign in using username and password. No email verification required.
+              Sign in using username and password.
             </p>
           </div>
 
@@ -473,6 +543,84 @@ export default function AppClient() {
             Sign out
           </button>
         </header>
+
+        {pendingSubtopicsCount > 0 && (
+          <div className="mt-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+            Reminder: You have {pendingSubtopicsCount} pending subtopics. Complete at least 2 today to stay on track.
+          </div>
+        )}
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold">AI Progress Analyzer</h2>
+              <button
+                onClick={handleAnalyzeProgress}
+                disabled={isAnalyzing}
+                className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-900 disabled:opacity-60"
+              >
+                {isAnalyzing ? "Analyzing..." : "Analyze"}
+              </button>
+            </div>
+            {analysis ? (
+              <div className="mt-4 space-y-3 text-sm">
+                <p className="text-slate-200">{analysis.summary}</p>
+                <p className="text-slate-400">Risk: {analysis.riskLevel.toUpperCase()}</p>
+                <p className="text-amber-200">{analysis.reminder}</p>
+                <ul className="space-y-2 text-slate-300">
+                  {analysis.actions.map((action) => (
+                    <li key={action} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                      {action}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-400">
+                Get a strict analysis of your learning pace, risk level, and next actions.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
+            <h2 className="text-lg font-semibold">Doubt Clearing Chat</h2>
+            <div className="mt-4 space-y-3">
+              <input
+                value={doubtTopic}
+                onChange={(event) => setDoubtTopic(event.target.value)}
+                placeholder="Topic (e.g. DSA)"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+              />
+              <textarea
+                value={doubtText}
+                onChange={(event) => setDoubtText(event.target.value)}
+                placeholder="Ask your doubt..."
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white placeholder:text-slate-500"
+              />
+              <button
+                onClick={handleDoubtChat}
+                disabled={isDoubtLoading}
+                className="rounded-xl bg-emerald-400 px-4 py-2 text-xs font-semibold text-slate-900 disabled:opacity-60"
+              >
+                {isDoubtLoading ? "Thinking..." : "Get answer"}
+              </button>
+            </div>
+            {doubtReply && (
+              <div className="mt-4 space-y-3 text-sm">
+                <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-slate-200">
+                  {doubtReply.answer}
+                </p>
+                <ul className="space-y-2 text-slate-300">
+                  {doubtReply.followUps.map((item) => (
+                    <li key={item} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="mt-10 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
