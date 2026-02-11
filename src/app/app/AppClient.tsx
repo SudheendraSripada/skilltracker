@@ -131,10 +131,11 @@ export default function AppClient() {
 
   const handleMagicLink = async () => {
     setMessage(null);
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+        emailRedirectTo: `${appUrl}/app`,
       },
     });
 
