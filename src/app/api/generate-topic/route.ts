@@ -7,7 +7,87 @@ export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   topic: z.string().min(2).max(120),
+  mode: z.enum(["predefined", "ai"]).optional().default("predefined"),
 });
+
+type TemplateData = {
+  subtopics: Array<{ title: string; description: string }>;
+  resources: Array<{ title: string; url: string; type: "youtube" | "web" }>;
+};
+
+function fallbackTemplate(topic: string): TemplateData {
+  const q = encodeURIComponent(topic);
+  return {
+    subtopics: [
+      { title: `${topic} Fundamentals`, description: `Understand the core concepts and terminology of ${topic}.` },
+      { title: `${topic} Core Workflow`, description: "Learn the main workflow and common implementation pattern." },
+      { title: `${topic} Practice Tasks`, description: "Solve practical tasks to build confidence and speed." },
+      { title: `${topic} Intermediate Patterns`, description: "Cover reusable patterns and problem-solving techniques." },
+      { title: `${topic} Capstone Assignment`, description: "Build one mini-project and document outcomes." },
+    ],
+    resources: [
+      { title: "Official Documentation", url: `https://www.google.com/search?q=${q}+official+documentation`, type: "web" },
+      { title: "Video Crash Course", url: `https://www.youtube.com/results?search_query=${q}+crash+course`, type: "youtube" },
+      { title: "Practice Problems", url: `https://www.google.com/search?q=${q}+practice+problems`, type: "web" },
+    ],
+  };
+}
+
+function predefinedTemplate(topic: string): TemplateData {
+  const t = topic.toLowerCase();
+  if (t.includes("dsa") || (t.includes("data") && t.includes("structure"))) {
+    return {
+      subtopics: [
+        { title: "Arrays and Strings", description: "Master indexing, traversal, and two-pointer techniques." },
+        { title: "Linked Lists and Stacks", description: "Implement common operations and analyze time complexity." },
+        { title: "Trees and BST", description: "Practice traversals and recursive problem solving." },
+        { title: "Graphs", description: "Learn BFS, DFS, and shortest-path basics." },
+        { title: "Dynamic Programming", description: "Use state transition and memoization patterns." },
+      ],
+      resources: [
+        { title: "NeetCode DSA Roadmap", url: "https://neetcode.io/roadmap", type: "web" },
+        { title: "Abdul Bari Data Structures Playlist", url: "https://www.youtube.com/results?search_query=abdul+bari+data+structures", type: "youtube" },
+        { title: "LeetCode Practice", url: "https://leetcode.com/problemset/", type: "web" },
+      ],
+    };
+  }
+
+  if (t.includes("react")) {
+    return {
+      subtopics: [
+        { title: "Components and JSX", description: "Build reusable UI units and understand render flow." },
+        { title: "State and Props", description: "Model data flow and component communication." },
+        { title: "Hooks", description: "Use useState, useEffect, and custom hooks correctly." },
+        { title: "Routing and Forms", description: "Manage navigation and controlled forms." },
+        { title: "Performance and Patterns", description: "Apply memoization, splitting, and clean architecture." },
+      ],
+      resources: [
+        { title: "React Official Docs", url: "https://react.dev", type: "web" },
+        { title: "React Full Course", url: "https://www.youtube.com/results?search_query=react+full+course", type: "youtube" },
+        { title: "Frontend Mentor", url: "https://www.frontendmentor.io/challenges", type: "web" },
+      ],
+    };
+  }
+
+  if (t.includes("python")) {
+    return {
+      subtopics: [
+        { title: "Python Syntax and Data Types", description: "Use Python syntax, collections, and built-ins efficiently." },
+        { title: "Functions and Modules", description: "Design reusable functions and organize code in modules." },
+        { title: "File Handling and Exceptions", description: "Read/write files and handle runtime errors cleanly." },
+        { title: "Object-Oriented Python", description: "Build classes and apply inheritance and encapsulation." },
+        { title: "Projects and Automation", description: "Build scripts and automate repetitive tasks." },
+      ],
+      resources: [
+        { title: "Python Docs", url: "https://docs.python.org/3/", type: "web" },
+        { title: "Python for Beginners", url: "https://www.youtube.com/results?search_query=python+for+beginners", type: "youtube" },
+        { title: "Exercism Python Track", url: "https://exercism.org/tracks/python", type: "web" },
+      ],
+    };
+  }
+
+  return fallbackTemplate(topic);
+}
 
 export async function POST(request: Request) {
   try {
@@ -35,8 +115,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const plan = await generateTopicPlan(body.topic);
-    const resources = await generateResources(body.topic);
+    const template = body.mode === "predefined" ? predefinedTemplate(body.topic) : null;
+    const plan = template ? { subtopics: template.subtopics } : await generateTopicPlan(body.topic);
+    const resources = template ? { resources: template.resources } : await generateResources(body.topic);
     const subtopicRows = plan.subtopics.map((subtopic, index) => ({
       topic_id: topicRow.id,
       user_id: user.id,

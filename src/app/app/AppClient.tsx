@@ -102,6 +102,7 @@ export default function AppClient() {
   const [learningGoal, setLearningGoal] = useState("");
   const [topics, setTopics] = useState<Topic[]>([]);
   const [newTopic, setNewTopic] = useState("");
+  const [generationMode, setGenerationMode] = useState<"predefined" | "ai">("predefined");
   const [message, setMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [pendingTestTopicId, setPendingTestTopicId] = useState<string | null>(null);
@@ -302,7 +303,7 @@ export default function AppClient() {
       const response = await fetch("/api/generate-topic", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: newTopic.trim() }),
+        body: JSON.stringify({ topic: newTopic.trim(), mode: generationMode }),
       });
 
       const data = await response.json();
@@ -620,8 +621,26 @@ export default function AppClient() {
           <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
             <h2 className="text-lg font-semibold">Create a learning track</h2>
             <p className="text-sm text-slate-400">
-              Enter a topic and build a structured learning path with supporting resources.
+              Enter a topic and generate assignments. Use Predefined for fast setup, AI for deeper customization.
             </p>
+            <div className="mt-3 flex gap-2 rounded-xl border border-slate-800 p-1">
+              <button
+                onClick={() => setGenerationMode("predefined")}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs ${
+                  generationMode === "predefined" ? "bg-emerald-400 text-slate-900" : "text-slate-300"
+                }`}
+              >
+                Predefined (Fast)
+              </button>
+              <button
+                onClick={() => setGenerationMode("ai")}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs ${
+                  generationMode === "ai" ? "bg-emerald-400 text-slate-900" : "text-slate-300"
+                }`}
+              >
+                AI (Slower)
+              </button>
+            </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <input
                 value={newTopic}
@@ -634,7 +653,7 @@ export default function AppClient() {
                 disabled={isGenerating}
                 className="rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 transition hover:bg-emerald-300 disabled:opacity-60"
               >
-                {isGenerating ? "Building..." : "Create"}
+                {isGenerating ? "Generating assignments..." : "Create"}
               </button>
             </div>
             {message && <p className="mt-3 text-sm text-amber-200">{message}</p>}
@@ -652,6 +671,26 @@ export default function AppClient() {
         </section>
 
         <section className="mt-10 space-y-6">
+          {isGenerating && (
+            <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 animate-pulse">
+              <div className="h-6 w-1/3 rounded bg-slate-700" />
+              <div className="mt-3 h-4 w-1/2 rounded bg-slate-800" />
+              <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+                <div className="space-y-3">
+                  <div className="h-4 w-28 rounded bg-slate-700" />
+                  <div className="h-14 rounded-2xl bg-slate-800" />
+                  <div className="h-14 rounded-2xl bg-slate-800" />
+                  <div className="h-14 rounded-2xl bg-slate-800" />
+                </div>
+                <div className="space-y-3">
+                  <div className="h-4 w-24 rounded bg-slate-700" />
+                  <div className="h-16 rounded-2xl bg-slate-800" />
+                  <div className="h-16 rounded-2xl bg-slate-800" />
+                </div>
+              </div>
+            </div>
+          )}
+
           {topics.length === 0 && (
             <div className="rounded-3xl border border-dashed border-slate-800 p-10 text-center text-slate-400">
               No topics yet. Create your first learning track to begin.
