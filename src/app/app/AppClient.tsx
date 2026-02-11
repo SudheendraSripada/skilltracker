@@ -197,39 +197,33 @@ export default function AppClient() {
       return;
     }
 
-    const email = usernameToEmail(cleanUsername);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-
-    if (error) {
-      setMessage(error.message);
-      return;
-    }
-
-    if (!data.user) {
-      setMessage("Sign up failed. Please try again.");
-      return;
-    }
-
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      user_id: data.user.id,
-      username: cleanUsername,
-      full_name: fullName.trim(),
-      primary_skill: primarySkill.trim(),
-      experience_level: experienceLevel.trim(),
-      learning_goal: learningGoal.trim(),
+    const signUpResponse = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: cleanUsername,
+        password,
+        fullName: fullName.trim(),
+        primarySkill: primarySkill.trim(),
+        experienceLevel: experienceLevel.trim(),
+        learningGoal: learningGoal.trim(),
+      }),
     });
+    const signUpData = await signUpResponse.json();
 
-    if (profileError) {
-      setMessage(profileError.message);
+    if (!signUpResponse.ok) {
+      setMessage(signUpData.error ?? "Sign up failed.");
       return;
     }
 
-    if (!data.session) {
-      setMessage("Account created. Please login with your username and password.");
+    const email = usernameToEmail(cleanUsername);
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    if (loginError) {
+      setMessage(loginError.message);
       return;
     }
 
-    setMessage("Account created. You are now signed in.");
+    setMessage("Account created and logged in.");
   };
 
   const handleLogin = async () => {
