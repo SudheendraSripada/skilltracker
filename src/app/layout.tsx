@@ -17,6 +17,7 @@ const plexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Skill Tracker",
   description: "Plan, track, and validate your learning progress in one workspace.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   keywords: [
     "skill tracker",
     "learning tracker",
