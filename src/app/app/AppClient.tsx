@@ -355,6 +355,13 @@ export default function AppClient() {
     setMessage(null);
     setTestResult(null);
     setIsStartingTest(true);
+    const topic = topics.find((item) => item.id === topicId);
+    setActiveTest({
+      testId: "",
+      topicId,
+      topicTitle: topic?.title ?? "Topic Test",
+      questions: [],
+    });
     try {
       const response = await fetch("/api/generate-test", {
         method: "POST",
@@ -367,7 +374,6 @@ export default function AppClient() {
         throw new Error(data.error ?? "Failed to start test");
       }
 
-      const topic = topics.find((item) => item.id === topicId);
       setActiveTest({
         testId: data.testId,
         topicId,
