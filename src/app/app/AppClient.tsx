@@ -105,6 +105,7 @@ export default function AppClient() {
   const [generationMode, setGenerationMode] = useState<"predefined" | "ai">("predefined");
   const [message, setMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingTopics, setIsLoadingTopics] = useState(false);
   const [pendingTestTopicId, setPendingTestTopicId] = useState<string | null>(null);
   const [activeTest, setActiveTest] = useState<ActiveTest | null>(null);
   const [testAnswers, setTestAnswers] = useState<Record<string, string>>({});
@@ -164,6 +165,7 @@ export default function AppClient() {
   };
 
   const loadTopics = async () => {
+    setIsLoadingTopics(true);
     const { data, error } = await supabase
       .from("topics")
       .select(
@@ -175,10 +177,12 @@ export default function AppClient() {
 
     if (error) {
       setMessage(error.message);
+      setIsLoadingTopics(false);
       return;
     }
 
     setTopics((data ?? []) as Topic[]);
+    setIsLoadingTopics(false);
   };
 
   const handleSignUp = async () => {
@@ -691,7 +695,42 @@ export default function AppClient() {
             </div>
           )}
 
-          {topics.length === 0 && (
+          {isLoadingTopics && (
+            <>
+              {[0, 1].map((index) => (
+                <div
+                  key={`skeleton-${index}`}
+                  className="rounded-3xl border border-slate-800 bg-slate-900/60 p-6 animate-pulse"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-2">
+                      <div className="h-5 w-48 rounded bg-slate-800" />
+                      <div className="h-4 w-32 rounded bg-slate-800" />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="h-8 w-24 rounded-full bg-slate-800" />
+                      <div className="h-8 w-28 rounded-full bg-slate-800" />
+                    </div>
+                  </div>
+                  <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+                    <div className="space-y-3">
+                      <div className="h-4 w-28 rounded bg-slate-800" />
+                      <div className="h-14 rounded-2xl bg-slate-800" />
+                      <div className="h-14 rounded-2xl bg-slate-800" />
+                      <div className="h-14 rounded-2xl bg-slate-800" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="h-4 w-24 rounded bg-slate-800" />
+                      <div className="h-16 rounded-2xl bg-slate-800" />
+                      <div className="h-16 rounded-2xl bg-slate-800" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {!isLoadingTopics && topics.length === 0 && (
             <div className="rounded-3xl border border-dashed border-slate-800 p-10 text-center text-slate-400">
               No topics yet. Create your first learning track to begin.
             </div>

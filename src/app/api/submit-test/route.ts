@@ -9,7 +9,7 @@ const RequestSchema = z.object({
   answers: z.array(
     z.object({
       questionId: z.string().uuid(),
-      answer: z.string().min(1),
+      answer: z.string().optional(),
     })
   ),
 });
@@ -55,7 +55,9 @@ export async function POST(request: Request) {
       .select("id, correct_answer")
       .eq("test_id", body.testId);
 
-    const answerMap = new Map(body.answers.map((item) => [item.questionId, item.answer]));
+    const answerMap = new Map(
+      body.answers.map((item) => [item.questionId, item.answer ?? ""])
+    );
     let score = 0;
 
     const updates =
