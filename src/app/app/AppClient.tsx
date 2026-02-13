@@ -110,6 +110,8 @@ export default function AppClient() {
   const [activeTest, setActiveTest] = useState<ActiveTest | null>(null);
   const [testAnswers, setTestAnswers] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<{ score: number; maxScore: number } | null>(null);
+  const [isStartingTest, setIsStartingTest] = useState(false);
+  const [isSubmittingTest, setIsSubmittingTest] = useState(false);
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ProgressAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -342,6 +344,7 @@ export default function AppClient() {
   const startTest = async (topicId: string) => {
     setMessage(null);
     setTestResult(null);
+    setIsStartingTest(true);
     try {
       const response = await fetch("/api/generate-test", {
         method: "POST",
@@ -364,12 +367,15 @@ export default function AppClient() {
       setTestAnswers({});
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsStartingTest(false);
     }
   };
 
   const submitTest = async () => {
     if (!activeTest) return;
     setMessage(null);
+    setIsSubmittingTest(true);
 
     const answers = Object.entries(testAnswers).map(([questionId, answer]) => ({
       questionId,
@@ -395,6 +401,8 @@ export default function AppClient() {
       await loadTopics();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unknown error");
+    } finally {
+      setIsSubmittingTest(false);
     }
   };
 
@@ -428,7 +436,15 @@ export default function AppClient() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
-        <p className="text-sm uppercase tracking-[0.3em] text-slate-400">Loading</p>
+        <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/60 p-8 animate-pulse">
+          <div className="h-3 w-24 rounded bg-slate-800" />
+          <div className="mt-4 h-7 w-48 rounded bg-slate-800" />
+          <div className="mt-6 space-y-3">
+            <div className="h-12 rounded-2xl bg-slate-800" />
+            <div className="h-12 rounded-2xl bg-slate-800" />
+            <div className="h-12 rounded-2xl bg-slate-800" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -561,7 +577,17 @@ export default function AppClient() {
                 {isAnalyzing ? "Analyzing..." : "Analyze"}
               </button>
             </div>
-            {analysis ? (
+            {isAnalyzing ? (
+              <div className="mt-4 space-y-3 animate-pulse">
+                <div className="h-4 w-3/4 rounded bg-slate-800" />
+                <div className="h-4 w-1/2 rounded bg-slate-800" />
+                <div className="h-4 w-2/3 rounded bg-slate-800" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="h-16 rounded-2xl bg-slate-800" />
+                  <div className="h-16 rounded-2xl bg-slate-800" />
+                </div>
+              </div>
+            ) : analysis ? (
               <div className="mt-4 space-y-3 text-sm">
                 <p className="text-slate-200">{analysis.summary}</p>
                 <p className="text-slate-400">Risk: {analysis.riskLevel.toUpperCase()}</p>
@@ -604,7 +630,13 @@ export default function AppClient() {
                 {isDoubtLoading ? "Thinking..." : "Get answer"}
               </button>
             </div>
-            {doubtReply && (
+            {isDoubtLoading ? (
+              <div className="mt-4 space-y-3 animate-pulse">
+                <div className="h-16 rounded-2xl bg-slate-800" />
+                <div className="h-12 rounded-2xl bg-slate-800" />
+                <div className="h-12 rounded-2xl bg-slate-800" />
+              </div>
+            ) : doubtReply && (
               <div className="mt-4 space-y-3 text-sm">
                 <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-slate-200">
                   {doubtReply.answer}
@@ -878,40 +910,58 @@ export default function AppClient() {
             </div>
 
             <div className="mt-6 space-y-6">
-              {activeTest.questions.map((question, index) => (
-                <div key={question.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                  <p className="text-sm font-semibold">
-                    {index + 1}. {question.prompt}
-                  </p>
-                  <div className="mt-3 grid gap-2">
-                    {question.options.map((option) => (
-                      <label
-                        key={option}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
-                          testAnswers[question.id] === option
-                            ? "border-emerald-400 bg-emerald-400/10"
-                            : "border-slate-800 bg-slate-950/40"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={question.id}
-                          value={option}
-                          checked={testAnswers[question.id] === option}
-                          onChange={() =>
-                            setTestAnswers((prev) => ({
-                              ...prev,
-                              [question.id]: option,
-                            }))
-                          }
-                          className="accent-emerald-400"
-                        />
-                        {option}
-                      </label>
-                    ))}
+              {isStartingTest ? (
+                <>
+                  {[0, 1, 2].map((index) => (
+                    <div
+                      key={`test-skeleton-${index}`}
+                      className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 animate-pulse"
+                    >
+                      <div className="h-4 w-3/4 rounded bg-slate-800" />
+                      <div className="mt-4 space-y-2">
+                        <div className="h-10 rounded-xl bg-slate-800" />
+                        <div className="h-10 rounded-xl bg-slate-800" />
+                        <div className="h-10 rounded-xl bg-slate-800" />
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                activeTest.questions.map((question, index) => (
+                  <div key={question.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                    <p className="text-sm font-semibold">
+                      {index + 1}. {question.prompt}
+                    </p>
+                    <div className="mt-3 grid gap-2">
+                      {question.options.map((option) => (
+                        <label
+                          key={option}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
+                            testAnswers[question.id] === option
+                              ? "border-emerald-400 bg-emerald-400/10"
+                              : "border-slate-800 bg-slate-950/40"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={question.id}
+                            value={option}
+                            checked={testAnswers[question.id] === option}
+                            onChange={() =>
+                              setTestAnswers((prev) => ({
+                                ...prev,
+                                [question.id]: option,
+                              }))
+                            }
+                            className="accent-emerald-400"
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
             {testResult ? (
@@ -921,9 +971,10 @@ export default function AppClient() {
             ) : (
               <button
                 onClick={submitTest}
+                disabled={isSubmittingTest}
                 className="mt-6 w-full rounded-xl bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-900"
               >
-                Submit assessment
+                {isSubmittingTest ? "Submitting..." : "Submit assessment"}
               </button>
             )}
           </div>
