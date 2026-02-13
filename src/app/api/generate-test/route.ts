@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -281,7 +282,19 @@ export async function POST(request: Request) {
 
     const body = RequestSchema.parse(await request.json());
 
-    const { data: existingTest } = await supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" },
+        { status: 500 }
+      );
+    }
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: existingTest } = await admin
       .from("tests")
       .select("id, status")
       .eq("topic_id", body.topicId)
@@ -311,7 +324,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ testId: existingTest.id, questions: questions ?? [] });
     }
 
-    const { data: topic } = await supabase
+    const { data: topic } = await admin
       .from("topics")
       .select("title")
       .eq("id", body.topicId)
@@ -322,7 +335,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Topic not found" }, { status: 404 });
     }
 
-    const { data: subtopicRows } = await supabase
+    const { data: subtopicRows } = await admin
       .from("subtopics")
       .select("title, status")
       .eq("topic_id", body.topicId)
@@ -338,7 +351,7 @@ export async function POST(request: Request) {
     const pickSeed = hashString(`${user.id}:${body.topicId}:questions`);
     const selectedQuestions = shuffle(library, pickSeed).slice(0, questionCount);
 
-    const { data: testRow, error: testError } = await supabase
+    const { data: testRow, error: testError } = await admin
       .from("tests")
       .insert({
         topic_id: body.topicId,
@@ -364,12 +377,12 @@ export async function POST(request: Request) {
       explanation: question.explanation ?? null,
     }));
 
-    const { error: questionError } = await supabase.from("test_questions").insert(questionRows);
+    const { error: questionError } = await admin.from("test_questions").insert(questionRows);
     if (questionError) {
       return NextResponse.json({ error: questionError.message }, { status: 500 });
     }
 
-    const { data: questions } = await supabase
+    const { data: questions } = await admin
       .from("test_questions")
       .select("id, prompt, options")
       .eq("test_id", testRow.id);
