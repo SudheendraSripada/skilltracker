@@ -88,6 +88,16 @@ function normalizeUsername(input: string) {
   return input.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
 }
 
+function getGrade(score: number, maxScore: number) {
+  if (maxScore === 0) return "N/A";
+  const percent = (score / maxScore) * 100;
+  if (percent >= 90) return "A";
+  if (percent >= 80) return "B";
+  if (percent >= 70) return "C";
+  if (percent >= 60) return "D";
+  return "F";
+}
+
 export default function AppClient() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [session, setSession] = useState<Session | null>(null);
@@ -965,9 +975,59 @@ export default function AppClient() {
             </div>
 
             {testResult ? (
-              <div className="mt-6 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-200">
-                Score: {testResult.score} / {testResult.maxScore}
-              </div>
+              (() => {
+                const maxScore = testResult.maxScore;
+                const score = testResult.score;
+                const percent = maxScore === 0 ? 0 : Math.round((score / maxScore) * 100);
+                const grade = getGrade(score, maxScore);
+                const radius = 36;
+                const circumference = 2 * Math.PI * radius;
+                const offset = circumference - (percent / 100) * circumference;
+
+                return (
+                  <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-emerald-200 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-20 w-20 animate-[pulse_1.2s_ease-out_1]">
+                        <svg viewBox="0 0 100 100" className="h-20 w-20">
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r={radius}
+                            stroke="rgba(148, 163, 184, 0.2)"
+                            strokeWidth="10"
+                            fill="none"
+                          />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r={radius}
+                            stroke="rgba(52, 211, 153, 1)"
+                            strokeWidth="10"
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeDasharray={circumference}
+                            strokeDashoffset={offset}
+                            transform="rotate(-90 50 50)"
+                            className="transition-all duration-700 ease-out"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-emerald-100">
+                          {percent}%
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm uppercase tracking-[0.2em] text-emerald-300">Performance</p>
+                        <p className="text-base font-semibold">
+                          Score {score} / {maxScore}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-400/40 bg-emerald-400/20 px-4 py-2 text-center text-lg font-semibold text-emerald-100">
+                      Grade {grade}
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <button
                 onClick={submitTest}
