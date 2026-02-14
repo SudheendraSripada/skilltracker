@@ -60,6 +60,8 @@ type ActiveTest = {
   questions: TestQuestion[];
 };
 
+type TestScope = "topic_full" | "subtopic_full" | "subtopic_quick";
+
 type Profile = {
   user_id: string;
   username: string;
@@ -125,7 +127,11 @@ export default function AppClient() {
   const [message, setMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
-  const [pendingTestTopicId, setPendingTestTopicId] = useState<string | null>(null);
+  const [pendingTestTopicId, setPendingTestTopicId] = useState<{
+    topicId: string;
+    subtopicId: string;
+    subtopicTitle: string;
+  } | null>(null);
   const [activeTest, setActiveTest] = useState<ActiveTest | null>(null);
   const [testAnswers, setTestAnswers] = useState<Record<string, string>>({});
   const [testResult, setTestResult] = useState<{ score: number; maxScore: number } | null>(null);
@@ -365,7 +371,11 @@ export default function AppClient() {
     }
   };
 
-  const handleCompleteSubtopic = async (topicId: string, subtopicId: string) => {
+  const handleCompleteSubtopic = async (
+    topicId: string,
+    subtopicId: string,
+    subtopicTitle: string
+  ) => {
     const { error } = await supabase
       .from("subtopics")
       .update({ status: "completed", completed_at: new Date().toISOString() })
@@ -377,7 +387,7 @@ export default function AppClient() {
     }
 
     await loadTopics();
-    setPendingTestTopicId(topicId);
+    setPendingTestTopicId({ topicId, subtopicId, subtopicTitle });
   };
 
   const handleUndoSubtopic = async (topicId: string, subtopicId: string) => {
@@ -409,7 +419,8 @@ export default function AppClient() {
     topicId: string,
     forceNew = false,
     subtopicId?: string,
-    subtopicTitle?: string
+    subtopicTitle?: string,
+    scope: TestScope = "topic_full"
   ) => {
     setMessage(null);
     setTestResult(null);
@@ -426,7 +437,7 @@ export default function AppClient() {
       const response = await fetch("/api/generate-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, forceNew, subtopicId }),
+        body: JSON.stringify({ topicId, forceNew, subtopicId, scope }),
       });
       const data = await response.json();
 
@@ -868,7 +879,7 @@ export default function AppClient() {
                       </span>
                     )}
                     <button
-                      onClick={() => startTest(topic.id, true)}
+                      onClick={() => startTest(topic.id, true, undefined, undefined, "topic_full")}
                       className="rounded-full border border-emerald-400 px-4 py-2 text-xs text-emerald-200 hover:bg-emerald-400/10"
                     >
                       Take topic assessment
@@ -908,7 +919,13 @@ export default function AppClient() {
                               </button>
                               <button
                                 onClick={() =>
-                                  startTest(topic.id, true, subtopic.id, subtopic.title)
+                                  startTest(
+                                    topic.id,
+                                    true,
+                                    subtopic.id,
+                                    subtopic.title,
+                                    "subtopic_full"
+                                  )
                                 }
                                 className="rounded-full border border-sky-400 px-3 py-1 text-xs text-sky-200 hover:bg-sky-400/10"
                               >
@@ -918,14 +935,22 @@ export default function AppClient() {
                           ) : (
                             <div className="flex flex-col gap-2">
                               <button
-                                onClick={() => handleCompleteSubtopic(topic.id, subtopic.id)}
+                                onClick={() =>
+                                  handleCompleteSubtopic(topic.id, subtopic.id, subtopic.title)
+                                }
                                 className={`rounded-full border px-3 py-1 text-xs ${STATUS_STYLES[subtopic.status]}`}
                               >
                                 Mark complete
                               </button>
                               <button
                                 onClick={() =>
-                                  startTest(topic.id, true, subtopic.id, subtopic.title)
+                                  startTest(
+                                    topic.id,
+                                    true,
+                                    subtopic.id,
+                                    subtopic.title,
+                                    "subtopic_full"
+                                  )
                                 }
                                 className="rounded-full border border-sky-400 px-3 py-1 text-xs text-sky-200 hover:bg-sky-400/10"
                               >
@@ -967,14 +992,20 @@ export default function AppClient() {
           <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
             <h3 className="text-lg font-semibold">Take a quick assessment?</h3>
             <p className="mt-2 text-sm text-slate-400">
-              You just completed a subtopic. Want to validate your understanding now?
+              You just completed {pendingTestTopicId.subtopicTitle}. Attempt 5 quick questions now?
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={() => {
-                  const topicId = pendingTestTopicId;
+                  const pending = pendingTestTopicId;
                   setPendingTestTopicId(null);
-                  void startTest(topicId, false);
+                  void startTest(
+                    pending.topicId,
+                    true,
+                    pending.subtopicId,
+                    pending.subtopicTitle,
+                    "subtopic_quick"
+                  );
                 }}
                 className="flex-1 rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900"
               >
@@ -982,7 +1013,7 @@ export default function AppClient() {
               </button>
               <button
                 onClick={() => {
-                  void skipTest(pendingTestTopicId);
+                  void skipTest(pendingTestTopicId.topicId);
                   setPendingTestTopicId(null);
                 }}
                 className="flex-1 rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200"

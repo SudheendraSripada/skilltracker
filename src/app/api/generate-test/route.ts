@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 const RequestSchema = z.object({
   topicId: z.string().uuid(),
   subtopicId: z.string().uuid().optional(),
+  scope: z
+    .enum(["topic_full", "subtopic_full", "subtopic_quick"])
+    .optional()
+    .default("topic_full"),
   forceNew: z.boolean().optional().default(false),
 });
 
@@ -344,12 +348,16 @@ export async function POST(request: Request) {
       .eq("user_id", user.id)
       .order("order_index", { ascending: true });
 
-    const completedCount =
-      subtopicRows?.filter((subtopic) => subtopic.status === "completed").length ?? 0;
     const allSubtopics = subtopicRows?.map((subtopic) => subtopic.title) ?? [];
 
+    const isSubtopicScope =
+      body.scope === "subtopic_full" || body.scope === "subtopic_quick";
+
     let selectedSubtopics = allSubtopics;
-    if (body.subtopicId) {
+    if (isSubtopicScope) {
+      if (!body.subtopicId) {
+        return NextResponse.json({ error: "subtopicId is required for subtopic scope" }, { status: 400 });
+      }
       const selected = subtopicRows?.find((subtopic) => subtopic.id === body.subtopicId);
       if (!selected) {
         return NextResponse.json({ error: "Subtopic not found" }, { status: 404 });
@@ -357,14 +365,18 @@ export async function POST(request: Request) {
       selectedSubtopics = [selected.title];
     }
 
-    const questionCount = Math.max(
-      20,
-      body.subtopicId ? 20 : Math.max(1, completedCount) * 5
-    );
+    let questionCount = 20;
+    if (body.scope === "subtopic_quick") {
+      questionCount = 5;
+    } else if (body.scope === "subtopic_full") {
+      questionCount = 20;
+    } else {
+      questionCount = 20;
+    }
 
     const library = buildQuestionLibrary(selectedSubtopics, user.id, topic.title);
     const pickSeed = hashString(
-      `${user.id}:${body.topicId}:${body.subtopicId ?? "topic"}:questions`
+      `${user.id}:${body.topicId}:${body.subtopicId ?? "topic"}:${body.scope}:questions`
     );
     const selectedQuestions = shuffle(library, pickSeed).slice(0, questionCount);
 
