@@ -56,6 +56,7 @@ type ActiveTest = {
   testId: string;
   topicId: string;
   topicTitle: string;
+  testLabel: string;
   questions: TestQuestion[];
 };
 
@@ -381,9 +382,14 @@ export default function AppClient() {
 
   const handleUndoSubtopic = async (topicId: string, subtopicId: string) => {
     const topic = topics.find((item) => item.id === topicId);
-    const hasAttemptedTest = topic?.tests?.some((test) => test.status === "attempted");
-    if (hasAttemptedTest) {
-      setMessage("You have completed test; cannot undo this subtopic.");
+    const subtopic = topic?.subtopics.find((row) => row.id === subtopicId);
+    const lockedByAttemptedTest = topic?.tests?.some((test) => {
+      if (test.status !== "attempted" || !test.attempted_at) return false;
+      if (!subtopic?.completed_at) return true;
+      return new Date(test.attempted_at).getTime() >= new Date(subtopic.completed_at).getTime();
+    });
+    if (lockedByAttemptedTest) {
+      setMessage("You have completed test up to this topic; cannot undo.");
       return;
     }
 
@@ -399,7 +405,12 @@ export default function AppClient() {
     await loadTopics();
   };
 
-  const startTest = async (topicId: string, forceNew = false) => {
+  const startTest = async (
+    topicId: string,
+    forceNew = false,
+    subtopicId?: string,
+    subtopicTitle?: string
+  ) => {
     setMessage(null);
     setTestResult(null);
     setIsStartingTest(true);
@@ -408,13 +419,14 @@ export default function AppClient() {
       testId: "",
       topicId,
       topicTitle: topic?.title ?? "Topic Test",
+      testLabel: subtopicTitle ? `${subtopicTitle} Test` : "Topic Assessment",
       questions: [],
     });
     try {
       const response = await fetch("/api/generate-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, forceNew }),
+        body: JSON.stringify({ topicId, forceNew, subtopicId }),
       });
       const data = await response.json();
 
@@ -426,6 +438,7 @@ export default function AppClient() {
         testId: data.testId,
         topicId,
         topicTitle: topic?.title ?? "Topic Test",
+        testLabel: subtopicTitle ? `${subtopicTitle} Test` : "Topic Assessment",
         questions: data.questions ?? [],
       });
       setTestAnswers({});
@@ -858,7 +871,7 @@ export default function AppClient() {
                       onClick={() => startTest(topic.id, true)}
                       className="rounded-full border border-emerald-400 px-4 py-2 text-xs text-emerald-200 hover:bg-emerald-400/10"
                     >
-                      Take assessment
+                      Take topic assessment
                     </button>
                     <button
                       onClick={() => deleteTopic(topic.id)}
@@ -886,19 +899,39 @@ export default function AppClient() {
                             )}
                           </div>
                           {subtopic.status === "completed" ? (
-                            <button
-                              onClick={() => handleUndoSubtopic(topic.id, subtopic.id)}
-                              className="rounded-full border border-amber-400 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10"
-                            >
-                              Undo complete
-                            </button>
+                            <div className="flex flex-col gap-2">
+                              <button
+                                onClick={() => handleUndoSubtopic(topic.id, subtopic.id)}
+                                className="rounded-full border border-amber-400 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10"
+                              >
+                                Undo complete
+                              </button>
+                              <button
+                                onClick={() =>
+                                  startTest(topic.id, true, subtopic.id, subtopic.title)
+                                }
+                                className="rounded-full border border-sky-400 px-3 py-1 text-xs text-sky-200 hover:bg-sky-400/10"
+                              >
+                                Take subtopic test
+                              </button>
+                            </div>
                           ) : (
-                            <button
-                              onClick={() => handleCompleteSubtopic(topic.id, subtopic.id)}
-                              className={`rounded-full border px-3 py-1 text-xs ${STATUS_STYLES[subtopic.status]}`}
-                            >
-                              Mark complete
-                            </button>
+                            <div className="flex flex-col gap-2">
+                              <button
+                                onClick={() => handleCompleteSubtopic(topic.id, subtopic.id)}
+                                className={`rounded-full border px-3 py-1 text-xs ${STATUS_STYLES[subtopic.status]}`}
+                              >
+                                Mark complete
+                              </button>
+                              <button
+                                onClick={() =>
+                                  startTest(topic.id, true, subtopic.id, subtopic.title)
+                                }
+                                className="rounded-full border border-sky-400 px-3 py-1 text-xs text-sky-200 hover:bg-sky-400/10"
+                              >
+                                Take subtopic test
+                              </button>
+                            </div>
                           )}
                         </div>
                       ))}
@@ -968,6 +1001,7 @@ export default function AppClient() {
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">Assessment</p>
                 <h3 className="text-2xl font-semibold">{activeTest.topicTitle}</h3>
+                <p className="mt-1 text-sm text-emerald-200">{activeTest.testLabel}</p>
                 <p className="text-sm text-slate-400">
                   Answer each question once. This is a single-attempt assessment.
                 </p>

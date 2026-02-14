@@ -15,25 +15,7 @@ type TemplateData = {
   resources: Array<{ title: string; url: string; type: "youtube" | "web" }>;
 };
 
-function fallbackTemplate(topic: string): TemplateData {
-  const q = encodeURIComponent(topic);
-  return {
-    subtopics: [
-      { title: `${topic} Fundamentals`, description: `Understand the core concepts and terminology of ${topic}.` },
-      { title: `${topic} Core Workflow`, description: "Learn the main workflow and common implementation pattern." },
-      { title: `${topic} Practice Tasks`, description: "Solve practical tasks to build confidence and speed." },
-      { title: `${topic} Intermediate Patterns`, description: "Cover reusable patterns and problem-solving techniques." },
-      { title: `${topic} Capstone Assignment`, description: "Build one mini-project and document outcomes." },
-    ],
-    resources: [
-      { title: "Official Documentation", url: `https://www.google.com/search?q=${q}+official+documentation`, type: "web" },
-      { title: "Video Crash Course", url: `https://www.youtube.com/results?search_query=${q}+crash+course`, type: "youtube" },
-      { title: "Practice Problems", url: `https://www.google.com/search?q=${q}+practice+problems`, type: "web" },
-    ],
-  };
-}
-
-function predefinedTemplate(topic: string): TemplateData {
+function predefinedTemplate(topic: string): TemplateData | null {
   const t = topic.toLowerCase();
   if (t.includes("dsa") || (t.includes("data") && t.includes("structure"))) {
     return {
@@ -86,7 +68,7 @@ function predefinedTemplate(topic: string): TemplateData {
     };
   }
 
-  return fallbackTemplate(topic);
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -117,7 +99,6 @@ export async function POST(request: Request) {
 
     const template = body.mode === "predefined" ? predefinedTemplate(body.topic) : null;
     const plan = template ? { subtopics: template.subtopics } : await generateTopicPlan(body.topic);
-    const resources = template ? { resources: template.resources } : await generateResources(body.topic);
     const subtopicRows = plan.subtopics.map((subtopic, index) => ({
       topic_id: topicRow.id,
       user_id: user.id,
@@ -125,26 +106,32 @@ export async function POST(request: Request) {
       description: subtopic.description ?? null,
       order_index: index,
     }));
-    const resourceRows = resources.resources.map((resource, index) => ({
-      topic_id: topicRow.id,
-      user_id: user.id,
-      title: resource.title,
-      url: resource.url,
-      type: resource.type,
-      rank: index,
-    }));
 
     const { error: subtopicError } = await supabase.from("subtopics").insert(subtopicRows);
     if (subtopicError) {
       return NextResponse.json({ error: subtopicError.message }, { status: 500 });
     }
 
-    const { error: resourceError } = await supabase.from("resources").insert(resourceRows);
-    if (resourceError) {
-      return NextResponse.json({ error: resourceError.message }, { status: 500 });
+    if (template) {
+      const resourceRows = template.resources.map((resource, index) => ({
+        topic_id: topicRow.id,
+        user_id: user.id,
+        title: resource.title,
+        url: resource.url,
+        type: resource.type,
+        rank: index,
+      }));
+      const { error: resourceError } = await supabase.from("resources").insert(resourceRows);
+      if (resourceError) {
+        return NextResponse.json({ error: resourceError.message }, { status: 500 });
+      }
     }
 
-    return NextResponse.json({ topicId: topicRow.id });
+    return NextResponse.json({
+      topicId: topicRow.id,
+      topicTitle: topicRow.title,
+      deferredResources: !template,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });

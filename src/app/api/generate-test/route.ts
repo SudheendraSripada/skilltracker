@@ -7,6 +7,8 @@ export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   topicId: z.string().uuid(),
+  subtopicId: z.string().uuid().optional(),
+  forceNew: z.boolean().optional().default(false),
 });
 
 type LocalQuestion = {
@@ -301,21 +303,21 @@ export async function POST(request: Request) {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (existingTest?.status === "attempted") {
+    if (!body.forceNew && existingTest?.status === "attempted") {
       return NextResponse.json(
         { error: "Test already attempted for this topic." },
         { status: 409 }
       );
     }
 
-    if (existingTest?.status === "skipped") {
+    if (!body.forceNew && existingTest?.status === "skipped") {
       return NextResponse.json(
         { error: "Test was skipped for this topic." },
         { status: 409 }
       );
     }
 
-    if (existingTest?.status === "offered") {
+    if (!body.forceNew && existingTest?.status === "offered") {
       const { data: questions } = await supabase
         .from("test_questions")
         .select("id, prompt, options")
@@ -337,40 +339,87 @@ export async function POST(request: Request) {
 
     const { data: subtopicRows } = await admin
       .from("subtopics")
-      .select("title, status")
+      .select("id, title, status")
       .eq("topic_id", body.topicId)
       .eq("user_id", user.id)
       .order("order_index", { ascending: true });
 
     const completedCount =
       subtopicRows?.filter((subtopic) => subtopic.status === "completed").length ?? 0;
-    const questionCount = Math.max(1, completedCount) * 5;
-    const subtopics = subtopicRows?.map((subtopic) => subtopic.title) ?? [];
+    const allSubtopics = subtopicRows?.map((subtopic) => subtopic.title) ?? [];
 
-    const library = buildQuestionLibrary(subtopics, user.id, topic.title);
-    const pickSeed = hashString(`${user.id}:${body.topicId}:questions`);
+    let selectedSubtopics = allSubtopics;
+    if (body.subtopicId) {
+      const selected = subtopicRows?.find((subtopic) => subtopic.id === body.subtopicId);
+      if (!selected) {
+        return NextResponse.json({ error: "Subtopic not found" }, { status: 404 });
+      }
+      selectedSubtopics = [selected.title];
+    }
+
+    const questionCount = Math.max(
+      20,
+      body.subtopicId ? 20 : Math.max(1, completedCount) * 5
+    );
+
+    const library = buildQuestionLibrary(selectedSubtopics, user.id, topic.title);
+    const pickSeed = hashString(
+      `${user.id}:${body.topicId}:${body.subtopicId ?? "topic"}:questions`
+    );
     const selectedQuestions = shuffle(library, pickSeed).slice(0, questionCount);
 
-    const { data: testRow, error: testError } = await admin
-      .from("tests")
-      .insert({
-        topic_id: body.topicId,
-        user_id: user.id,
-        status: "offered",
-        total_questions: selectedQuestions.length,
-      })
-      .select("id")
-      .single();
+    let testId: string | null = null;
 
-    if (testError || !testRow) {
-      return NextResponse.json(
-        { error: testError?.message ?? "Failed to create test" },
-        { status: 500 }
-      );
+    if (existingTest) {
+      testId = existingTest.id;
+      const { error: clearQuestionsError } = await admin
+        .from("test_questions")
+        .delete()
+        .eq("test_id", testId);
+      if (clearQuestionsError) {
+        return NextResponse.json({ error: clearQuestionsError.message }, { status: 500 });
+      }
+      const { error: resetTestError } = await admin
+        .from("tests")
+        .update({
+          status: "offered",
+          total_questions: selectedQuestions.length,
+          score: null,
+          max_score: null,
+          attempted_at: null,
+        })
+        .eq("id", testId)
+        .eq("user_id", user.id);
+      if (resetTestError) {
+        return NextResponse.json({ error: resetTestError.message }, { status: 500 });
+      }
+    } else {
+      const { data: testRow, error: testError } = await admin
+        .from("tests")
+        .insert({
+          topic_id: body.topicId,
+          user_id: user.id,
+          status: "offered",
+          total_questions: selectedQuestions.length,
+        })
+        .select("id")
+        .single();
+
+      if (testError || !testRow) {
+        return NextResponse.json(
+          { error: testError?.message ?? "Failed to create test" },
+          { status: 500 }
+        );
+      }
+      testId = testRow.id;
+    }
+
+    if (!testId) {
+      return NextResponse.json({ error: "Failed to initialize test" }, { status: 500 });
     }
 
     const questionRows = selectedQuestions.map((question) => ({
-      test_id: testRow.id,
+      test_id: testId,
       prompt: question.prompt,
       options: question.options,
       correct_answer: question.correctAnswer,
@@ -385,9 +434,9 @@ export async function POST(request: Request) {
     const { data: questions } = await admin
       .from("test_questions")
       .select("id, prompt, options")
-      .eq("test_id", testRow.id);
+      .eq("test_id", testId);
 
-    return NextResponse.json({ testId: testRow.id, questions: questions ?? [] });
+    return NextResponse.json({ testId, questions: questions ?? [] });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });
