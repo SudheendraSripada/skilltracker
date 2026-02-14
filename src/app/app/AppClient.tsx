@@ -98,6 +98,14 @@ function getGrade(score: number, maxScore: number) {
   return "F";
 }
 
+function getGreetingByTime() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  if (hour < 21) return "Good evening";
+  return "Good night";
+}
+
 export default function AppClient() {
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [session, setSession] = useState<Session | null>(null);
@@ -129,6 +137,7 @@ export default function AppClient() {
   const [doubtText, setDoubtText] = useState("");
   const [doubtReply, setDoubtReply] = useState<DoubtReply | null>(null);
   const [isDoubtLoading, setIsDoubtLoading] = useState(false);
+  const greeting = useMemo(() => getGreetingByTime(), []);
 
   const pendingSubtopicsCount = useMemo(() => {
     return topics.reduce((acc, topic) => {
@@ -329,6 +338,25 @@ export default function AppClient() {
 
       setNewTopic("");
       await loadTopics();
+      if (data.deferredResources && data.topicId && data.topicTitle) {
+        setMessage("Subtopics created. Loading resource assignments in background...");
+        void fetch("/api/generate-resources", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topicId: data.topicId, topic: data.topicTitle }),
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const payload = await res.json().catch(() => ({}));
+              throw new Error(payload.error ?? "Failed to generate resources");
+            }
+            await loadTopics();
+            setMessage("Resource assignments are now ready.");
+          })
+          .catch((error) => {
+            setMessage(error instanceof Error ? error.message : "Background resource generation failed.");
+          });
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unknown error");
     } finally {
@@ -351,7 +379,27 @@ export default function AppClient() {
     setPendingTestTopicId(topicId);
   };
 
-  const startTest = async (topicId: string) => {
+  const handleUndoSubtopic = async (topicId: string, subtopicId: string) => {
+    const topic = topics.find((item) => item.id === topicId);
+    const hasAttemptedTest = topic?.tests?.some((test) => test.status === "attempted");
+    if (hasAttemptedTest) {
+      setMessage("You have completed test; cannot undo this subtopic.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("subtopics")
+      .update({ status: "pending", completed_at: null })
+      .eq("id", subtopicId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    await loadTopics();
+  };
+
+  const startTest = async (topicId: string, forceNew = false) => {
     setMessage(null);
     setTestResult(null);
     setIsStartingTest(true);
@@ -366,7 +414,7 @@ export default function AppClient() {
       const response = await fetch("/api/generate-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId }),
+        body: JSON.stringify({ topicId, forceNew }),
       });
       const data = await response.json();
 
@@ -560,6 +608,7 @@ export default function AppClient() {
         <header className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Skill Tracker</p>
+            <p className="mt-1 text-sm text-emerald-200">{greeting}</p>
             <h1 className="text-3xl font-semibold">Personal Learning Studio</h1>
             <p className="text-slate-400 text-sm max-w-xl">
               {profile
@@ -806,7 +855,7 @@ export default function AppClient() {
                       </span>
                     )}
                     <button
-                      onClick={() => startTest(topic.id)}
+                      onClick={() => startTest(topic.id, true)}
                       className="rounded-full border border-emerald-400 px-4 py-2 text-xs text-emerald-200 hover:bg-emerald-400/10"
                     >
                       Take assessment
@@ -836,15 +885,21 @@ export default function AppClient() {
                               <p className="text-xs text-slate-400">{subtopic.description}</p>
                             )}
                           </div>
-                          <button
-                            onClick={() => handleCompleteSubtopic(topic.id, subtopic.id)}
-                            disabled={subtopic.status === "completed"}
-                            className={`rounded-full border px-3 py-1 text-xs ${
-                              STATUS_STYLES[subtopic.status]
-                            } disabled:opacity-60`}
-                          >
-                            {subtopic.status}
-                          </button>
+                          {subtopic.status === "completed" ? (
+                            <button
+                              onClick={() => handleUndoSubtopic(topic.id, subtopic.id)}
+                              className="rounded-full border border-amber-400 px-3 py-1 text-xs text-amber-200 hover:bg-amber-400/10"
+                            >
+                              Undo complete
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleCompleteSubtopic(topic.id, subtopic.id)}
+                              className={`rounded-full border px-3 py-1 text-xs ${STATUS_STYLES[subtopic.status]}`}
+                            >
+                              Mark complete
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -886,7 +941,7 @@ export default function AppClient() {
                 onClick={() => {
                   const topicId = pendingTestTopicId;
                   setPendingTestTopicId(null);
-                  void startTest(topicId);
+                  void startTest(topicId, false);
                 }}
                 className="flex-1 rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-slate-900"
               >
