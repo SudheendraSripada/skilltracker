@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import TestDemo from "@/components/TestDemo"; // <-- 1. Import the component here
 
 export default function LandingPage() {
   return (
@@ -59,6 +60,12 @@ export default function LandingPage() {
               </li>
             </ul>
           </section>
+          
+          {/* 2. ADDED THE TEST DEMO COMPONENT HERE */}
+          <section className="col-span-full mt-4">
+            <TestDemo />
+          </section>
+
         </main>
 
         <section id="how-it-works" className="mt-16 grid gap-6 lg:grid-cols-3">
