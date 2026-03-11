@@ -128,7 +128,7 @@ Rules:
 }
 
 export async function generateTest(topic: string, subtopics: string[], questionCount: number) {
-  const prompt = `Create a knowledge test for the topic: "${topic}".
+  const prompt = `Create a highly challenging, practical knowledge test for the topic: "${topic}".
 Subtopics covered: ${subtopics.join(", ")}
 Return JSON only, no markdown.
 Schema:
@@ -144,10 +144,12 @@ Schema:
 }
 Rules:
 - ${questionCount} questions.
-- Mixed difficulty, focus on applied understanding.
+- Focus strictly on advanced, applied understanding and practical implementation.
+- Include scenario-based questions where the user must identify the exact output of abstract code snippets, or find subtle architectural bugs.
+- Avoid basic definition questions entirely. Make them think.
 - 3-5 options per question.
 - correctAnswer must match one of the options exactly.
-- Keep prompts concise.
+- Keep prompts clear but challenging.
 `;
 
   const parsed = await callMistral(prompt);
@@ -155,7 +157,7 @@ Rules:
 }
 
 export async function generateResources(topic: string) {
-  const prompt = `You are a learning curator. Provide high-quality resources for: "${topic}".
+  const prompt = `You are a strict learning curator providing resources for: "${topic}".
 Return JSON only, no markdown, no commentary.
 Schema:
 {
@@ -163,8 +165,11 @@ Schema:
 }
 Rules:
 - 3-5 resources.
-- Prefer YouTube lectures and authoritative documentation.
-- Use stable URLs, avoid duplicates.
+- For YouTube resources, NEVER generate exact video watch URLs (they often break). INSTEAD, generate highly specific YouTube search query URLs.
+  Correct format: https://www.youtube.com/results?search_query=topic+name+full+course
+  Example for Vedic Math: https://www.youtube.com/results?search_query=vedic+mathematics+tricks+fast+calculation
+- For Web resources, use highly stable URLs from authoritative documentation (e.g. MDN, React Docs, official reference guides).
+- Ensure the titles are descriptive and actionable.
 `;
 
   const parsed = await callMistral(prompt);

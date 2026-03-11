@@ -751,17 +751,15 @@ export default function AppClient() {
             <div className="mt-3 flex gap-2 rounded-xl border border-slate-800 p-1">
               <button
                 onClick={() => setGenerationMode("predefined")}
-                className={`flex-1 rounded-lg px-3 py-2 text-xs ${
-                  generationMode === "predefined" ? "bg-emerald-400 text-slate-900" : "text-slate-300"
-                }`}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs ${generationMode === "predefined" ? "bg-emerald-400 text-slate-900" : "text-slate-300"
+                  }`}
               >
                 Predefined (Fast)
               </button>
               <button
                 onClick={() => setGenerationMode("ai")}
-                className={`flex-1 rounded-lg px-3 py-2 text-xs ${
-                  generationMode === "ai" ? "bg-emerald-400 text-slate-900" : "text-slate-300"
-                }`}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs ${generationMode === "ai" ? "bg-emerald-400 text-slate-900" : "text-slate-300"
+                  }`}
               >
                 AI (Slower)
               </button>
@@ -1065,18 +1063,26 @@ export default function AppClient() {
               ) : (
                 activeTest.questions.map((question, index) => (
                   <div key={question.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">
-                      {index + 1}. {question.prompt}
+                    <p className="text-sm font-semibold text-slate-100">
+                      <span className="text-emerald-400 mr-2">{index + 1}.</span>
+                      {question.prompt.split(/`([^`]+)`/).map((part: string, i: number) =>
+                        i % 2 === 1 ? (
+                          <code key={i} className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-emerald-300 font-mono">
+                            {part}
+                          </code>
+                        ) : (
+                          <span key={i}>{part}</span>
+                        )
+                      )}
                     </p>
-                    <div className="mt-3 grid gap-2">
+                    <div className="mt-4 grid gap-2">
                       {question.options.map((option) => (
                         <label
                           key={option}
-                          className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
-                            testAnswers[question.id] === option
-                              ? "border-emerald-400 bg-emerald-400/10"
-                              : "border-slate-800 bg-slate-950/40"
-                          }`}
+                          className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm transition-colors ${testAnswers[question.id] === option
+                            ? "border-emerald-400 bg-emerald-400/10 text-emerald-100"
+                            : "border-slate-800 bg-slate-950/40 text-slate-300 hover:border-slate-600 hover:bg-slate-900"
+                            }`}
                         >
                           <input
                             type="radio"
@@ -1089,9 +1095,19 @@ export default function AppClient() {
                                 [question.id]: option,
                               }))
                             }
-                            className="accent-emerald-400"
+                            className="mt-1 accent-emerald-400"
                           />
-                          {option}
+                          <div className="flex-1 leading-relaxed">
+                            {option.split(/`([^`]+)`/).map((part: string, i: number) =>
+                              i % 2 === 1 ? (
+                                <code key={i} className={`rounded px-1.5 py-0.5 text-xs font-mono ${testAnswers[question.id] === option ? 'bg-emerald-500/20 text-emerald-200' : 'bg-slate-800 text-slate-300'}`}>
+                                  {part}
+                                </code>
+                              ) : (
+                                <span key={i}>{part}</span>
+                              )
+                            )}
+                          </div>
                         </label>
                       ))}
                     </div>
