@@ -23,6 +23,7 @@ import type {
   TestQuestion,
   CreateTestInput,
   UpdateTestQuestionInput,
+  UpdateTestInput,
 } from '@/types/database';
 
 /**

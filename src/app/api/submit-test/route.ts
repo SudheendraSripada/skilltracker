@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 

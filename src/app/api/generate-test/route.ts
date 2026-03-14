@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
+import { generateDocumentTest } from "@/lib/mistral";
 
 export const runtime = "nodejs";
 
 const RequestSchema = z.object({
   topicId: z.string().uuid(),
   subtopicId: z.string().uuid().optional(),
+  documentId: z.string().uuid().optional(),
   scope: z
-    .enum(["topic_full", "subtopic_full", "subtopic_quick"])
+    .enum(["topic_full", "subtopic_full", "subtopic_quick", "document_practice"])
     .optional()
     .default("topic_full"),
   forceNew: z.boolean().optional().default(false),
@@ -374,11 +376,28 @@ export async function POST(request: Request) {
       questionCount = 20;
     }
 
-    const library = buildQuestionLibrary(selectedSubtopics, user.id, topic.title);
-    const pickSeed = hashString(
-      `${user.id}:${body.topicId}:${body.subtopicId ?? "topic"}:${body.scope}:questions`
-    );
-    const selectedQuestions = shuffle(library, pickSeed).slice(0, questionCount);
+    let selectedQuestions: LocalQuestion[] = [];
+    
+    if (body.documentId) {
+      const { data: document } = await admin.from("documents").select("extracted_text").eq("id", body.documentId).eq("user_id", user.id).single();
+      if (!document) {
+        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      }
+      
+      const aiTest = await generateDocumentTest(document.extracted_text, 10);
+      selectedQuestions = aiTest.questions.map(q => ({
+        prompt: q.prompt,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+      }));
+    } else {
+      const library = buildQuestionLibrary(selectedSubtopics, user.id, topic.title);
+      const pickSeed = hashString(
+        `${user.id}:${body.topicId}:${body.subtopicId ?? "topic"}:${body.scope}:questions`
+      );
+      selectedQuestions = shuffle(library, pickSeed).slice(0, questionCount);
+    }
 
     let testId: string | null = null;
 

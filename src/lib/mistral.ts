@@ -156,6 +156,36 @@ Rules:
   return TestSchema.parse(parsed);
 }
 
+export async function generateDocumentTest(documentText: string, questionCount: number) {
+  const truncatedText = documentText.slice(0, 15000);
+  const prompt = `Create a challenging knowledge test based strictly on the following document extract.
+Document Extract:
+${truncatedText}
+
+Return JSON only, no markdown.
+Schema:
+{
+  "questions": [
+    {
+      "prompt": "",
+      "options": ["", "", "", ""],
+      "correctAnswer": "",
+      "explanation": ""
+    }
+  ]
+}
+Rules:
+- ${questionCount} questions.
+- Focus strictly on the information presented in the document.
+- Include scenario-based questions if applicable.
+- 4 options per question.
+- correctAnswer must match one of the options exactly.
+`;
+
+  const parsed = await callMistral(prompt);
+  return TestSchema.parse(parsed);
+}
+
 export async function generateResources(topic: string) {
   const prompt = `You are a strict learning curator providing resources for: "${topic}".
 Return JSON only, no markdown, no commentary.
@@ -229,4 +259,57 @@ Rules:
 
   const parsed = await callMistral(prompt);
   return DoubtReplySchema.parse(parsed);
+}
+
+export async function answerDocumentChat(input: {
+  documentText: string;
+  messages: { role: string; content: string }[];
+  model: string;
+}) {
+  const { apiKey, baseUrl } = getMistralConfig();
+  
+  const truncatedText = input.documentText.slice(0, 15000);
+
+  const systemPrompt = `You are a helpful learning assistant. Use the following document extract to answer the user's questions. Do not hallucinate outside the document.
+Document context:
+${truncatedText}`;
+
+  const apiMessages = [
+    { role: "system", content: systemPrompt },
+    ...input.messages.map(m => ({ role: m.role, content: m.content }))
+  ];
+
+  if (['gpt-4o', 'claude-3-5-sonnet'].includes(input.model)) {
+    if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+      return { answer: `*[MOCK ${input.model} RESPONSE]*\n\nBased on your document, here is a simulated response to: "${input.messages[input.messages.length - 1]?.content}". \n\n(Configure API keys in .env to use the real model.)` };
+    }
+  }
+
+  let actualModel = input.model;
+  if (!actualModel.startsWith('mistral')) {
+    actualModel = 'mistral-large-latest'; // upgrade to large if they selected premium but we fallback
+  }
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: actualModel,
+      messages: apiMessages,
+      temperature: 0.2,
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`AI error: ${response.status} ${message}`);
+  }
+
+  const data = await response.json();
+  const text = data?.choices?.[0]?.message?.content ?? "";
+  
+  return { answer: text };
 }

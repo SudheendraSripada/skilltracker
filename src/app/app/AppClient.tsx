@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { PremiumModal } from "@/components/PremiumModal";
+import Link from "next/link";
 
 const STATUS_STYLES: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 border-amber-200",
@@ -37,6 +39,12 @@ type TestSummary = {
   attempted_at: string | null;
 };
 
+type DocumentSummary = {
+  id: string;
+  title: string;
+  file_url: string;
+};
+
 type Topic = {
   id: string;
   title: string;
@@ -44,6 +52,7 @@ type Topic = {
   subtopics: Subtopic[];
   resources: Resource[];
   tests: TestSummary[];
+  documents: DocumentSummary[];
 };
 
 type TestQuestion = {
@@ -69,6 +78,8 @@ type Profile = {
   primary_skill: string;
   experience_level: string;
   learning_goal: string;
+  is_premium: boolean;
+  streak_count: number;
 };
 
 type ProgressAnalysis = {
@@ -144,6 +155,8 @@ export default function AppClient() {
   const [doubtText, setDoubtText] = useState("");
   const [doubtReply, setDoubtReply] = useState<DoubtReply | null>(null);
   const [isDoubtLoading, setIsDoubtLoading] = useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
+  const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
   const greeting = useMemo(() => getGreetingByTime(), []);
 
   const pendingSubtopicsCount = useMemo(() => {
@@ -183,7 +196,7 @@ export default function AppClient() {
     if (!session) return;
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id, username, full_name, primary_skill, experience_level, learning_goal")
+      .select("user_id, username, full_name, primary_skill, experience_level, learning_goal, is_premium, streak_count")
       .eq("user_id", session.user.id)
       .single();
 
@@ -197,7 +210,7 @@ export default function AppClient() {
     const { data, error } = await supabase
       .from("topics")
       .select(
-        "id, title, created_at, subtopics(id, title, description, order_index, status, completed_at), resources(id, title, url, type, rank), tests(id, status, score, max_score, attempted_at)"
+        "id, title, created_at, subtopics(id, title, description, order_index, status, completed_at), resources(id, title, url, type, rank), tests(id, status, score, max_score, attempted_at), documents(id, title, file_url)"
       )
       .order("created_at", { ascending: false })
       .order("order_index", { foreignTable: "subtopics", ascending: true })
@@ -521,6 +534,40 @@ export default function AppClient() {
     }
   };
 
+  const handleUploadDocument = async (topicId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setUploadingTopicId(topicId);
+    setMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("topicId", topicId);
+
+      const response = await fetch("/api/upload-document", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 403 && data.error && data.error.includes("Free plan limited")) {
+          setIsPremiumModalOpen(true);
+        } else {
+          throw new Error(data.error ?? "Failed to upload document");
+        }
+        return;
+      }
+      
+      await loadTopics();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploadingTopicId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
@@ -632,13 +679,31 @@ export default function AppClient() {
         <header className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.4em] text-emerald-300">Skill Tracker</p>
-            <p className="mt-1 text-sm text-emerald-200">{greeting}</p>
-            <h1 className="text-3xl font-semibold">Personal Learning Studio</h1>
-            <p className="text-slate-400 text-sm max-w-xl">
-              {profile
-                ? `${profile.full_name} | ${profile.primary_skill} | ${profile.experience_level}`
-                : "Organize subtopics, track completions, and validate progress in one flow."}
-            </p>
+            <p className="text-sm text-emerald-200">{greeting}</p>
+            <h1 className="text-3xl font-semibold flex items-center gap-3">
+              Personal Learning Studio
+              {profile?.is_premium ? (
+                <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-bold text-emerald-400 uppercase tracking-wider border border-emerald-500/30">
+                  PRO
+                </span>
+              ) : (
+                <button onClick={() => setIsPremiumModalOpen(true)} className="rounded bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-300 uppercase tracking-wider hover:bg-slate-700 transition">
+                  Upgrade
+                </button>
+              )}
+            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-2">
+              <p className="text-slate-400 text-sm">
+                {profile
+                  ? `${profile.full_name} | ${profile.primary_skill} | ${profile.experience_level}`
+                  : "Organize subtopics, track completions, and validate progress in one flow."}
+              </p>
+              {profile && (
+                <div className="flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-semibold text-orange-400 border border-orange-500/20">
+                  🔥 {profile.streak_count} Day Streak
+                </div>
+              )}
+            </div>
           </div>
           <button
             onClick={() => supabase.auth.signOut()}
@@ -962,18 +1027,46 @@ export default function AppClient() {
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Resources</h4>
+                    <h4 className="flex items-center justify-between text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+                      <span>Documents & Resources</span>
+                      <label className={`cursor-pointer rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 transition hover:bg-slate-700 ${uploadingTopicId === topic.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {uploadingTopicId === topic.id ? "Uploading..." : "+ Upload PDF"}
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          className="hidden"
+                          onChange={(e) => handleUploadDocument(topic.id, e)}
+                        />
+                      </label>
+                    </h4>
+                    
                     <div className="space-y-3">
+                      {topic.documents?.map((doc) => (
+                        <Link
+                          key={doc.id}
+                          href={`/app/topic/${topic.id}/document/${doc.id}`}
+                          className="block rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm hover:border-emerald-400 transition"
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold text-emerald-100">{doc.title}</p>
+                            <span className="rounded bg-emerald-500 pb-0.5 pt-1 px-2 text-[10px] uppercase font-bold text-slate-900">
+                              Reader
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-emerald-300">Click to chat with AI and generate tailored quizzes.</p>
+                        </Link>
+                      ))}
+
                       {topic.resources.map((resource) => (
                         <a
                           key={resource.id}
                           href={resource.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="block rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm hover:border-emerald-400"
+                          className="block rounded-2xl border border-slate-800 bg-slate-950/40 p-4 text-sm hover:border-slate-600 transition"
                         >
                           <p className="font-semibold">{resource.title}</p>
-                          <p className="text-xs text-slate-400">{resource.type.toUpperCase()} link</p>
+                          <p className="mt-1 text-xs text-slate-400">{resource.type.toUpperCase()} link</p>
                         </a>
                       ))}
                     </div>
@@ -984,6 +1077,8 @@ export default function AppClient() {
           })}
         </section>
       </div>
+
+      <PremiumModal isOpen={isPremiumModalOpen} onClose={() => setIsPremiumModalOpen(false)} />
 
       {pendingTestTopicId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">

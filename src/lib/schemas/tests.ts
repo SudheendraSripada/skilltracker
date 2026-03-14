@@ -13,7 +13,7 @@ export const TestSchema = z.object({
   topic_id: z.string().uuid('Invalid topic ID'),
   user_id: z.string().uuid('Invalid user ID'),
   status: z.enum(['offered', 'in_progress', 'completed']),
-  total_questions: z.number().int().non_negative(),
+  total_questions: z.number().int().nonnegative(),
   score: z.number().int().nullable(),
   max_score: z.number().int().nullable(),
   attempted_at: z.string().datetime().nullable(),
@@ -35,7 +35,7 @@ export const CreateTestSchema = z.object({
   total_questions: z
     .number()
     .int('Total questions must be an integer')
-    .non_negative('Total questions must be non-negative')
+    .nonnegative('Total questions must be non-negative')
     .optional()
     .default(0),
   max_score: z
@@ -74,9 +74,7 @@ export const CreateTestQuestionSchema = z.object({
     .min(5, 'Question prompt must be at least 5 characters')
     .max(2000, 'Question prompt must not exceed 2000 characters'),
   options: z
-    .record(z.string(), z.string())
-    .min(2, 'At least 2 options are required')
-    .max(10, 'Maximum 10 options allowed'),
+    .record(z.string(), z.string()),
   correct_answer: z.string().min(1, 'Correct answer is required'),
   explanation: z
     .string()
@@ -109,7 +107,7 @@ export const UpdateTestSchema = z.object({
   score: z
     .number()
     .int('Score must be an integer')
-    .non_negative('Score must be non-negative')
+    .nonnegative('Score must be non-negative')
     .optional(),
   max_score: z
     .number()

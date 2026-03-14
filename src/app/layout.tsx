@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { getSiteUrl } from "@/lib/site-url";
+import { FeedbackWidget } from "@/components/layout/FeedbackWidget";
+import { Analytics } from "@vercel/analytics/react";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -38,8 +40,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} antialiased font-sans`}>
+      <body className={`${inter.variable} antialiased font-sans relative`}>
         {children}
+        <FeedbackWidget />
+        <Analytics />
       </body>
     </html>
   );
