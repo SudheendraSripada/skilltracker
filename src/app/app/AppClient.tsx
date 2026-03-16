@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { PremiumModal } from "@/components/PremiumModal";
 import Link from "next/link";
 
 const STATUS_STYLES: Record<string, string> = {
@@ -155,9 +154,16 @@ export default function AppClient() {
   const [doubtText, setDoubtText] = useState("");
   const [doubtReply, setDoubtReply] = useState<DoubtReply | null>(null);
   const [isDoubtLoading, setIsDoubtLoading] = useState(false);
-  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   const [uploadingTopicId, setUploadingTopicId] = useState<string | null>(null);
   const greeting = useMemo(() => getGreetingByTime(), []);
+
+  const TRENDING_TOPICS = [
+    "System Design", "LeetCode DSA", "React 19", "TypeScript 5",
+    "Machine Learning", "Kubernetes", "Rust Language", "PostgreSQL",
+    "Next.js 15", "Python FastAPI", "Docker", "GraphQL",
+    "Redis Caching", "AWS Fundamentals", "Web Security", "Node.js",
+    "MongoDB", "CI/CD Pipelines"
+  ];
 
   const pendingSubtopicsCount = useMemo(() => {
     return topics.reduce((acc, topic) => {
@@ -552,11 +558,7 @@ export default function AppClient() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 403 && data.error && data.error.includes("Free plan limited")) {
-          setIsPremiumModalOpen(true);
-        } else {
-          throw new Error(data.error ?? "Failed to upload document");
-        }
+        throw new Error(data.error ?? "Failed to upload document");
         return;
       }
       
@@ -682,15 +684,9 @@ export default function AppClient() {
             <p className="text-sm text-emerald-200">{greeting}</p>
             <h1 className="text-3xl font-semibold flex items-center gap-3">
               Personal Learning Studio
-              {profile?.is_premium ? (
-                <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-bold text-emerald-400 uppercase tracking-wider border border-emerald-500/30">
-                  PRO
-                </span>
-              ) : (
-                <button onClick={() => setIsPremiumModalOpen(true)} className="rounded bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-300 uppercase tracking-wider hover:bg-slate-700 transition">
-                  Upgrade
-                </button>
-              )}
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs font-bold text-emerald-400 uppercase tracking-wider border border-emerald-500/30">
+                Free Forever
+              </span>
             </h1>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-2">
               <p className="text-slate-400 text-sm">
@@ -792,9 +788,9 @@ export default function AppClient() {
               </div>
             ) : doubtReply && (
               <div className="mt-4 space-y-3 text-sm">
-                <p className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-slate-200">
-                  {doubtReply.answer}
-                </p>
+                <div className="overflow-auto max-h-72 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                  <p className="text-slate-200 whitespace-pre-wrap leading-relaxed">{doubtReply.answer}</p>
+                </div>
                 <ul className="space-y-2 text-slate-300">
                   {doubtReply.followUps.map((item) => (
                     <li key={item} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
@@ -803,6 +799,68 @@ export default function AppClient() {
                   ))}
                 </ul>
               </div>
+            )}
+          </div>
+        </section>
+
+        {/* Trending Topics Section */}
+        <section className="mt-10">
+          <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <span>🔥</span> Trending Today
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">Click any topic to instantly generate a full learning track</p>
+              </div>
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-400">
+                {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {TRENDING_TOPICS.map((topic) => (
+                <button
+                  key={topic}
+                  disabled={isGenerating}
+                  onClick={async () => {
+                    setNewTopic(topic);
+                    setGenerationMode("ai");
+                    setIsGenerating(true);
+                    setMessage(null);
+                    try {
+                      const response = await fetch("/api/generate-topic", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ topic, mode: "ai" }),
+                      });
+                      const data = await response.json();
+                      if (!response.ok) throw new Error(data.error ?? "Failed to generate topic");
+                      setNewTopic("");
+                      await loadTopics();
+                      if (data.deferredResources && data.topicId && data.topicTitle) {
+                        setMessage(`'${topic}' track created! Loading resources...`);
+                        void fetch("/api/generate-resources", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ topicId: data.topicId, topic: data.topicTitle }),
+                        }).then(async (res) => {
+                          if (res.ok) { await loadTopics(); setMessage(`'${topic}' is ready to learn!`); }
+                        });
+                      }
+                    } catch (err) {
+                      setMessage(err instanceof Error ? err.message : "Unknown error");
+                    } finally {
+                      setIsGenerating(false);
+                    }
+                  }}
+                  className="group relative overflow-hidden rounded-full border border-slate-700/80 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-300 transition-all hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {topic}
+                </button>
+              ))}
+            </div>
+            {isGenerating && newTopic && (
+              <p className="mt-4 text-sm text-emerald-400 animate-pulse">⚡ Generating "{newTopic}" track...</p>
             )}
           </div>
         </section>
@@ -1078,9 +1136,7 @@ export default function AppClient() {
         </section>
       </div>
 
-      <PremiumModal isOpen={isPremiumModalOpen} onClose={() => setIsPremiumModalOpen(false)} />
-
-      {pendingTestTopicId && (
+{pendingTestTopicId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
           <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6">
             <h3 className="text-lg font-semibold">Take a quick assessment?</h3>

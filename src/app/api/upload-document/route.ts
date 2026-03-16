@@ -22,16 +22,6 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient();
-    
-    // Check if user is premium, limit to 1 document if not
-    const { data: profile } = await supabase.from('profiles').select('is_premium').eq('user_id', user.id).single();
-    
-    if (!profile?.is_premium) {
-      const { count } = await supabase.from('documents').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
-      if (count && count >= 1) {
-        return NextResponse.json({ error: 'Free plan limited to 1 document. Please upgrade to Pro.' }, { status: 403 });
-      }
-    }
 
     // Extract text
     const buffer = Buffer.from(await file.arrayBuffer());

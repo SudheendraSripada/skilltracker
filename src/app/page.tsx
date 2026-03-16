@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import TestDemo from "@/components/TestDemo"; // <-- 1. Import the component here
 import { motion, type Variants } from "framer-motion";
 
 const fadeUp: Variants = {
@@ -98,17 +97,6 @@ export default function LandingPage() {
             </motion.ul>
           </motion.section>
           
-          <motion.section 
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-50px" }}
-            variants={fadeUp}
-            className="col-span-full mt-12 relative"
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/5 to-transparent blur-3xl -z-10" />
-            <TestDemo />
-          </motion.section>
-
         </main>
 
         <motion.section 

@@ -5,7 +5,6 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { ModelSwitcher, AIModel } from "@/components/ModelSwitcher";
 import { ArrowLeft, Send, Loader2, PlayCircle, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { PremiumModal } from "@/components/PremiumModal";
 import { useRouter } from "next/navigation";
 
 export default function DocumentPage(props: { params: Promise<{ topicId: string; docId: string }> }) {
@@ -20,7 +19,6 @@ export default function DocumentPage(props: { params: Promise<{ topicId: string;
   const [loading, setLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [model, setModel] = useState<AIModel>("mistral-small-latest");
-  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
   
   const supabase = createSupabaseBrowserClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,8 +128,6 @@ export default function DocumentPage(props: { params: Promise<{ topicId: string;
           <ModelSwitcher
             selectedModel={model}
             onModelChange={setModel}
-            isPremiumUser={!!profile?.is_premium}
-            onPremiumClick={() => setIsPremiumModalOpen(true)}
           />
         </div>
       </header>
@@ -212,8 +208,6 @@ export default function DocumentPage(props: { params: Promise<{ topicId: string;
           </div>
         </div>
       </div>
-      
-      <PremiumModal isOpen={isPremiumModalOpen} onClose={() => setIsPremiumModalOpen(false)} />
     </div>
   );
 }
